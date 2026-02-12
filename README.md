@@ -17,7 +17,7 @@ Tested on Linux, Windows, and MAC OS.
 
 **Prerequisites:**
 
--   Python 3.8+
+-   Python >=3.8, <=3.10
 -   PyTorch 1.12+ and corresponding torchvision (preferably with CUDA
     GPU support for quick label propagation on Linux and Windows).
 
