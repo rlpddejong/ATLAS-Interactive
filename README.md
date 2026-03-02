@@ -1,6 +1,6 @@
-# 🚀 SurgeNetSeg: Clip-Level Anatomy Segmentation for Minimally Invasive Surgery
+# 🚀 ATLAS-Interactive: The Interactive Labeling Tool for Clip-Level Anatomy and Tool Segmentation in Minimally Invasive Surgery
 
-SurgeNetSeg is an open-source framework for clip-level anatomical segmentation in minimally invasive surgery. It combines keyframe annotation with temporal mask propagation, enabling fast, temporally consistent labeling. The dataset includes 75k+ frames across 11 procedures and 29 anatomical classes, supporting development of segmentation models with improved temporal stability and generalization. Pretrained models and an interactive GUI are included for easy experimentation and annotation.
+ATLAS-Interactive is an open-source framework for clip-level anatomical segmentation in minimally invasive surgery. It combines keyframe annotation with temporal mask propagation, enabling fast, temporally consistent labeling. The Tool was trained on over 100 videos, 500 clips, 120k surgical video frames including 14 surgical procedures and distinct 42 classes.
 
 ### Overview of our dataset
 
@@ -72,7 +72,7 @@ Place the downloaded `.pth` files in a `gui/weights/` directory.
 
 ## 📚 Citation
 
-To be added.
+Will be announced soon!
 
 ``` bibtex
 @inproceedings{...
