@@ -70,7 +70,7 @@ The pretrained model weights should be downloaded automatically upon first run. 
 
 Place the downloaded `.pth` files in a `gui/weights/` directory.
 
-## Upcoming Features
+## 🔮 Upcoming Features
 ``` bash
 - [X] Add .pth models for semantic segmentation
 - [] Add .pth models for instance segmentation
