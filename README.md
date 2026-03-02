@@ -24,13 +24,13 @@ Tested on Linux, Windows, and MAC OS.
 **Clone our repository:**
 
 ``` bash
-git clone https://github.com/rlpddejong/SurgeNetSeg.git
+git clone https://github.com/rlpddejong/ATLAS-Interactive.git
 ```
 
 **Install with pip:**
 
 ``` bash
-cd SurgeNetSeg
+cd ATLAS-Interactive
 pip install -e .
 ```
 
@@ -69,6 +69,13 @@ The pretrained model weights should be downloaded automatically upon first run. 
     https://huggingface.co/TimJaspersTue/SurgeNetSeg/resolve/main/ritm-surgenetseg-50k.pth?download=true
 
 Place the downloaded `.pth` files in a `gui/weights/` directory.
+
+## Upcoming Features
+``` bash
+- [X] Add .pth models for semantic segmentation
+- [] Add .pth models for instance segmentation
+```
+
 
 ## 📚 Citation
 
