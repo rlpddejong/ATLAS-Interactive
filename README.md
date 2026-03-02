@@ -1,6 +1,6 @@
 # 🚀 ATLAS-Interactive: The Interactive Labeling Tool for Clip-Level Anatomy and Tool Segmentation in Minimally Invasive Surgery
 
-ATLAS-Interactive is an open-source framework for clip-level anatomical segmentation in minimally invasive surgery. It combines keyframe annotation with temporal mask propagation, enabling fast, temporally consistent labeling. The tool was trained on over 100 videos, 500 clips, 120k surgical video frames including 14 surgical procedures and distinct 42 classes.
+ATLAS-Interactive is an open-source framework for clip-level anatomical segmentation in minimally invasive surgery. It combines keyframe annotation with temporal mask propagation, enabling fast, temporally consistent labeling. The tool was trained on over 100 videos, 500 clips, and 120k surgical video frames including 14 surgical procedures and distinct 42 classes.
 
 ### Overview of our dataset
 
