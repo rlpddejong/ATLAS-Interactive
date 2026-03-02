@@ -76,7 +76,6 @@ Place the downloaded `.pth` files in a `gui/weights/` directory.
 - [] Add .pth models for instance segmentation
 ```
 
-
 ## 📚 Citation
 
 Will be announced soon!
@@ -85,6 +84,10 @@ Will be announced soon!
 @inproceedings{...
 }
 ```
+
+## ⚖️ License
+- Code: MIT — see LICENSE (permissive; commercial use permitted).
+- Pretrained model weights: CC-BY-NC-SA — non-commercial share-alike. The weights and any derivative models that include these weights are NOT cleared for commercial use. See LICENSE_MODELS for details and the precise license text.
 
 ## 🙏 Acknowledgments
 
