@@ -314,6 +314,9 @@ class GUI(QWidget):
         # Toggle visualization mode
         QShortcut(QKeySequence(Qt.Key.Key_T), self).activated.connect(controller.on_toggle_vis_mode)
 
+        # undo last click
+        QShortcut(QKeySequence('Ctrl+Z'), self).activated.connect(controller.on_undo)
+
         # quit shortcut
         QShortcut(QKeySequence(Qt.Key.Key_Q), self).activated.connect(self.close)
 

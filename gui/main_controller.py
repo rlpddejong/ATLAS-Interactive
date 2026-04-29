@@ -470,6 +470,39 @@ class MainController():
             self.update_memory_gauges()
             self.update_gpu_gauges()
 
+    def on_undo(self):
+        if self.propagating:
+            return
+
+        if self.in_polygon_mode and self.polygon_points:
+            removed = self.polygon_points.pop()
+            self.hover_first_point = False
+            self.gui.text(f'Removed polygon point: {removed}')
+            self.compose_polygon_overlay()
+            self.update_canvas()
+            return
+
+        if not isinstance(self.interaction, ClickInteraction):
+            self.gui.text('Nothing to undo.')
+            return
+
+        undo_mask = self.click_ctrl.undo()
+        if undo_mask is None:
+            # Revert to the pre-interaction state
+            self.curr_prob = self.interaction.prev_mask.clone()
+            self.curr_mask = torch_prob_to_numpy_mask(self.curr_prob)
+            self.save_current_mask()
+            self.interacted_prob = None
+            self.interaction = None
+            self.show_current_frame()
+            return
+
+        self.interaction.obj_mask = undo_mask.to(self.device, non_blocking=True)
+        self.interaction.first_click = False
+        self.interacted_prob = self.interaction.predict().to(self.device, non_blocking=True)
+        self.update_interacted_mask()
+        self.update_gpu_gauges()
+
     def on_play_video_timer(self):
         self.curr_ti += 1
         if self.curr_ti > self.T - 1:
