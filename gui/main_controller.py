@@ -89,7 +89,7 @@ class MainController():
         self.curr_prob[0] = 1
 
         # visualization info
-        self.vis_mode: str = 'davis'
+        self.vis_mode: str = 'overlay'
         self.vis_image: np.ndarray = None
         self.save_visualization_mode: str = 'None'
         self.save_soft_mask: bool = False
@@ -723,12 +723,12 @@ class MainController():
                 self.update_canvas()
 
     def on_toggle_vis_mode(self):
-        if self.vis_mode == 'davis':
-            self.vis_mode = 'light'
-        elif self.vis_mode == 'light':
-            self.vis_mode = 'davis'
-        else:
-            self.vis_mode = 'davis'
+        vis_modes = ['image', 'mask', 'overlay']
+        try:
+            next_index = (vis_modes.index(self.vis_mode) + 1) % len(vis_modes)
+            self.vis_mode = vis_modes[next_index]
+        except ValueError:
+            self.vis_mode = 'overlay'
         print(f'Visualization mode changed to {self.vis_mode}')
 
         # Update the dropdown menu to show the current mode

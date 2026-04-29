@@ -104,16 +104,12 @@ class GUI(QWidget):
 
         # combobox
         self.combo = QComboBox(self)
+        
         self.combo.addItem("mask")
-        self.combo.addItem("davis")
-        self.combo.addItem("fade")
-        self.combo.addItem("light")
-        self.combo.addItem("popup")
-        self.combo.addItem("rgba")
-        self.combo.setCurrentText('davis')
+        self.combo.addItem("overlay")
+        self.combo.addItem("image")
+        self.combo.setCurrentText('overlay')
         self.combo.currentTextChanged.connect(controller.set_vis_mode)
-
-        self.combo.setCurrentText('None')
 
         # Main canvas -> QLabel
         self.main_canvas = QLabel()
