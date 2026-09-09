@@ -46,9 +46,22 @@ if __name__ in "__main__":
     from PySide6.QtWidgets import QApplication
     import qdarktheme
     from gui.main_controller import MainController
+    from gui.source_dialog import prompt_for_source
 
     # logging
     log = logging.getLogger()
+
+    # create the Qt application early so we can show a picker before setup
+    app = QApplication(sys.argv)
+    qdarktheme.setup_theme("auto")
+
+    # no source given on the command line: ask interactively instead of crashing
+    if args.video is None and args.images is None and args.workspace is None:
+        source = prompt_for_source()
+        if source is None:
+            sys.exit(0)
+        args.video = source.get('video')
+        args.images = source.get('images')
 
     # getting hydra's config without using its decorator
     initialize(version_base='1.3.2', config_path="gui/cutie/config", job_name="gui")
@@ -74,8 +87,6 @@ if __name__ in "__main__":
             cfg[k] = v
 
     # start everything
-    app = QApplication(sys.argv)
-    qdarktheme.setup_theme("auto")
     ex = MainController(cfg)
     if 'workspace_init_only' in cfg and cfg['workspace_init_only']:
         sys.exit(0)

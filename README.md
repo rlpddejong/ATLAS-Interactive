@@ -47,6 +47,8 @@ python gui.py --video examples/example.mp4
 
 This automatically downloads the model weights from huggingface into the `gui/weights` folder. And next, it extracts frames from an example video from the [Cholec80 dataset](https://camma.unistra.fr/datasets/) located in the `examples` folder. Then the GUI will open and be ready for labeling. 
 
+Alternatively, simply run `python gui.py` with no arguments — a dialog will let you pick a video file or an image folder to label.
+
 **Using the tool**
 
 See [TIPS](gui/TIPS.md) for some tips on using the tool. These are also shown at the top right inside the labeling tool.
