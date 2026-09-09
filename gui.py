@@ -1,6 +1,17 @@
 import logging
 import os
 import sys
+
+# when launched via pythonw.exe (no console), sys.stdout/stderr are None; any
+# print() or tqdm progress bar would then crash with nowhere to show the error.
+# redirect them to a log file instead so the app keeps running silently.
+if sys.stdout is None or sys.stderr is None:
+    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = open(os.path.join(log_dir, 'gui.log'), 'a', buffering=1, encoding='utf-8')
+    sys.stdout = log_file
+    sys.stderr = log_file
+
 # fix for Windows
 if 'QT_QPA_PLATFORM_PLUGIN_PATH' not in os.environ:
     os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = ''

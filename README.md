@@ -15,6 +15,14 @@ ATLAS-Interactive is an open-source framework for clip-level anatomical segmenta
 
 Tested on Linux, Windows, and MAC OS.
 
+### Windows: one-command install (no Python/conda required)
+
+If you're setting this up on a clinical workstation that doesn't have Python or conda installed, download or clone this repository and double-click [install.bat](install.bat). It sets up its own isolated Python environment (via [uv](https://github.com/astral-sh/uv), installed automatically if needed), installs PyTorch with CUDA support and all other dependencies, and adds an **ATLAS-Interactive** shortcut to the desktop that opens the labeling tool directly — no terminal involved.
+
+This assumes an NVIDIA GPU and an internet connection during install. It installs the `cu121` build of PyTorch; if that fails to match your GPU driver, open [install.ps1](install.ps1) and change `cu121` to `cu118` or `cu124`.
+
+### Manual install (Linux, macOS, or for development)
+
 **Prerequisites:**
 
 -   Python >=3.8, <=3.10

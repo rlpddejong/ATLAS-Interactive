@@ -1,5 +1,6 @@
 run_*.sh
 log/
+logs/
 saves
 saves/
 weights/
