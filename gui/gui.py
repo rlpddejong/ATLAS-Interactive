@@ -50,6 +50,10 @@ class GUI(QWidget):
         self.backward_run_button.clicked.connect(controller.on_backward_propagation)
         self.backward_run_button.setMinimumWidth(150)
 
+        self.load_source_button = QPushButton('Load new video...')
+        self.load_source_button.clicked.connect(controller.on_load_new_source)
+        self.load_source_button.setMinimumWidth(150)
+
         # universal progressbar
         self.progressbar = QProgressBar()
         self.progressbar.setMinimum(0)
@@ -222,6 +226,7 @@ class GUI(QWidget):
         control_topbox.addWidget(self.commit_button)
         control_topbox.addWidget(self.forward_run_button)
         control_topbox.addWidget(self.backward_run_button)
+        control_topbox.addWidget(self.load_source_button)
         control_botbox.addWidget(self.progressbar)
         control_subbox.addLayout(control_topbox)
         control_subbox.addLayout(control_botbox)
@@ -377,6 +382,21 @@ class GUI(QWidget):
     def update_slider(self, value):
         self.lcd.setText('{: 3d} / {: 3d}'.format(value, self.controller.T - 1))
         self.tl_slider.setValue(value)
+
+    def reload_for_new_source(self):
+        # re-sync widgets that cache dimensions/length from a previously loaded video
+        self.h = self.controller.h
+        self.w = self.controller.w
+        self.T = self.controller.T
+
+        self.setWindowTitle(f'SurgeNetSeg demo: {self.cfg["workspace"]}')
+
+        self.tl_slider.blockSignals(True)
+        self.tl_slider.setMaximum(self.T - 1)
+        self.tl_slider.setValue(0)
+        self.tl_slider.blockSignals(False)
+
+        self.lcd.setText('{: 5d} / {: 5d}'.format(0, self.T - 1))
 
     def pixel_pos_to_image_pos(self, x, y):
         # Un-scale and un-pad the label coordinates into image coordinates

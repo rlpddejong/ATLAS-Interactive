@@ -28,6 +28,7 @@ from gui.click_controller import ClickController
 from gui.reader import PropagationReader, get_data_loader
 from gui.exporter import convert_frames_to_video, convert_mask_to_binary
 from gui.cutie.utils.download_models import download_models_if_needed
+from gui.source_dialog import prompt_for_source
 
 from gui.cutie.utils.palette import custom_palette_np # added
 
@@ -142,6 +143,62 @@ class MainController():
         self.cutie.load_weights(model_weights)
 
         self.click_ctrl = ClickController(self.cfg.ritm_weights, device=self.device)
+
+    def on_load_new_source(self):
+        if self.propagating:
+            self.gui.text('Please pause propagation before loading a new video.')
+            return
+
+        source = prompt_for_source()
+        if source is None:
+            return
+
+        # persist any pending edit on the current frame before switching away from it
+        if self.curr_frame_dirty:
+            self.save_current_mask()
+            self.curr_frame_dirty = False
+
+        with open_dict(self.cfg):
+            self.cfg['video'] = source.get('video')
+            self.cfg['images'] = source.get('images')
+            self.cfg['workspace'] = None
+
+        self.gui.text('Loading new source, please wait...')
+        self.gui.process_events()
+
+        # reusing the already-loaded model weights; only the workspace/resources are swapped
+        self.res_man = ResourceManager(self.cfg)
+        self.processor = InferenceCore(self.cutie, self.cfg)
+
+        # reset per-video state
+        self.length = self.res_man.length
+        self.interaction = None
+        self.curr_ti = 0
+        self.propagating = False
+        self.propagate_direction = 'none'
+        self.curr_frame_dirty = False
+        self.interacted_prob = None
+        self.polygon_points = []
+        self.hover_first_point = False
+        self.in_polygon_mode = False
+
+        self.curr_image_np = np.zeros((self.h, self.w, 3), dtype=np.uint8)
+        self.curr_image_torch = None
+        self.curr_mask = np.zeros((self.h, self.w), dtype=np.uint8)
+        self.curr_prob = index_numpy_to_one_hot_torch(self.curr_mask, self.num_objects + 1).to(
+            self.device)
+
+        self.gui.reload_for_new_source()
+        self.gui.pause_propagation()  # re-enable buttons/slider in case a run was interrupted
+
+        self.load_current_image_mask()
+        self.show_current_frame()
+
+        self.update_memory_gauges()
+        self.update_gpu_gauges()
+        self.gui.set_object_color(self.curr_object)
+
+        self.gui.text(f'Loaded new source. Workspace: {self.cfg["workspace"]}')
 
     def hit_number_key(self, number: int):
         if number == self.curr_object:
