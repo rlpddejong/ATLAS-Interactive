@@ -39,10 +39,13 @@ log = logging.getLogger()
 
 class MainController():
 
-    def __init__(self, cfg: DictConfig) -> None:
+    def __init__(self, cfg: DictConfig, status_callback=None) -> None:
         super().__init__()
 
         self.initialized = False
+        # optional callback(str | None) used to report startup progress, e.g. to a
+        # splash screen; called with None once the GUI is ready to be shown.
+        self._status_callback = status_callback
 
         # setting up the workspace
         if cfg["workspace"] is None:
@@ -62,12 +65,15 @@ class MainController():
         self.amp = cfg['amp']
 
         # initializing the network(s)
+        self._report_status('Loading segmentation models...')
         self.initialize_networks()
 
         # main components
+        self._report_status('Preparing workspace (extracting frames if needed)...')
         self.res_man = ResourceManager(cfg)
         self.history = HistoryLogger(cfg['workspace'])
         if 'workspace_init_only' in cfg and cfg['workspace_init_only']:
+            self._report_status(None)
             return
         self.processor = InferenceCore(self.cutie, self.cfg)
         self.gui = GUI(self, self.cfg)
@@ -130,6 +136,7 @@ class MainController():
         self.in_polygon_mode = False
 
         self.gui.show()
+        self._report_status(None)
         self.gui.text('Initialized.')
         self.initialized = True
         self.history.log('session_started', video=cfg['video'], images=cfg['images'])
@@ -138,6 +145,10 @@ class MainController():
         self._try_load_layer('./docs/uiuc.png')
         self.gui.set_object_color(self.curr_object)
         self.update_config()
+
+    def _report_status(self, message) -> None:
+        if self._status_callback is not None:
+            self._status_callback(message)
 
     def initialize_networks(self) -> None:
         download_models_if_needed()

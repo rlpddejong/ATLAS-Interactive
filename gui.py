@@ -50,11 +50,33 @@ if __name__ in "__main__":
     # input arguments
     args = get_arguments()
 
-    # perform slow imports after parsing args
+    # show a loading window immediately, before any of the slow imports below,
+    # so there's visible feedback instead of an apparent hang -- torch/model/
+    # CUDA startup can take a while, especially on the very first run.
+    from PySide6.QtWidgets import QApplication, QSplashScreen
+    from PySide6.QtGui import QPixmap, QColor
+    from PySide6.QtCore import Qt
+
+    app = QApplication(sys.argv)
+
+    splash_pixmap = QPixmap(420, 160)
+    splash_pixmap.fill(QColor('#2b2b2b'))
+    splash = QSplashScreen(splash_pixmap)
+
+    def set_status(message):
+        if message is None:
+            splash.close()
+        else:
+            splash.showMessage(message, Qt.AlignmentFlag.AlignCenter, QColor('white'))
+        app.processEvents()
+
+    splash.show()
+    set_status('Starting ATLAS-Interactive...')
+
+    # perform slow imports after showing the splash
     import torch
     from omegaconf import open_dict
     from hydra import compose, initialize
-    from PySide6.QtWidgets import QApplication
     import qdarktheme
     from gui.main_controller import MainController
     from gui.source_dialog import prompt_for_source
@@ -62,17 +84,18 @@ if __name__ in "__main__":
     # logging
     log = logging.getLogger()
 
-    # create the Qt application early so we can show a picker before setup
-    app = QApplication(sys.argv)
     qdarktheme.setup_theme("auto")
 
     # no source given on the command line: ask interactively instead of crashing
     if args.video is None and args.images is None and args.workspace is None:
+        splash.close()
         source = prompt_for_source()
         if source is None:
             sys.exit(0)
         args.video = source.get('video')
         args.images = source.get('images')
+        splash.show()
+        set_status('Starting ATLAS-Interactive...')
 
     # getting hydra's config without using its decorator
     initialize(version_base='1.3.2', config_path="gui/cutie/config", job_name="gui")
@@ -98,7 +121,7 @@ if __name__ in "__main__":
             cfg[k] = v
 
     # start everything
-    ex = MainController(cfg)
+    ex = MainController(cfg, status_callback=set_status)
     if 'workspace_init_only' in cfg and cfg['workspace_init_only']:
         sys.exit(0)
     else:
