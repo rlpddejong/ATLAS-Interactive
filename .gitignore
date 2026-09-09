@@ -149,3 +149,6 @@ dmypy.json
 # Models
 .pt
 .pth
+
+# VSCode
+.vscode/
