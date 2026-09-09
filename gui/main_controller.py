@@ -29,6 +29,7 @@ from gui.reader import PropagationReader, get_data_loader
 from gui.exporter import convert_frames_to_video, convert_mask_to_binary
 from gui.cutie.utils.download_models import download_models_if_needed
 from gui.source_dialog import prompt_for_source
+from gui.history_logger import HistoryLogger
 
 from gui.cutie.utils.palette import custom_palette_np # added
 
@@ -65,6 +66,7 @@ class MainController():
 
         # main components
         self.res_man = ResourceManager(cfg)
+        self.history = HistoryLogger(cfg['workspace'])
         if 'workspace_init_only' in cfg and cfg['workspace_init_only']:
             return
         self.processor = InferenceCore(self.cutie, self.cfg)
@@ -130,6 +132,7 @@ class MainController():
         self.gui.show()
         self.gui.text('Initialized.')
         self.initialized = True
+        self.history.log('session_started', video=cfg['video'], images=cfg['images'])
 
         # try to load the default overlay
         self._try_load_layer('./docs/uiuc.png')
@@ -169,6 +172,8 @@ class MainController():
         # reusing the already-loaded model weights; only the workspace/resources are swapped
         self.res_man = ResourceManager(self.cfg)
         self.processor = InferenceCore(self.cutie, self.cfg)
+        self.history = HistoryLogger(self.cfg['workspace'])
+        self.history.log('session_started', video=self.cfg['video'], images=self.cfg['images'])
 
         # reset per-video state
         self.length = self.res_man.length
@@ -297,6 +302,11 @@ class MainController():
                         # ✅ Update probability map so it's used for propagation
                         self.curr_prob = index_numpy_to_one_hot_torch(self.curr_mask, self.num_objects + 1).to(self.device)
 
+                        self.history.log('polygon_completed',
+                                          frame=self.curr_ti,
+                                          object_id=self.curr_object,
+                                          num_points=len(self.polygon_points))
+
                         self.polygon_points = []
                         self.hover_first_point = False
                         self.show_current_frame()
@@ -305,6 +315,10 @@ class MainController():
                 # Add new point
                 self.polygon_points.append((x, y))
                 self.gui.text(f'Polygon point added: ({x}, {y})')
+                self.history.log('polygon_point_added',
+                                  frame=self.curr_ti,
+                                  object_id=self.curr_object,
+                                  point=[x, y])
                 self.compose_polygon_overlay()
                 self.update_canvas()
                 return
@@ -314,6 +328,10 @@ class MainController():
                 if self.polygon_points:
                     removed = self.polygon_points.pop()
                     self.gui.text(f'Removed polygon point: {removed}')
+                    self.history.log('polygon_point_removed',
+                                      frame=self.curr_ti,
+                                      object_id=self.curr_object,
+                                      point=list(removed))
                     self.compose_polygon_overlay()
                     self.update_canvas()
                 else:
@@ -344,6 +362,12 @@ class MainController():
                 self.interacted_prob = self.interaction.predict().to(self.device, non_blocking=True)
                 self.update_interacted_mask()
                 self.update_gpu_gauges()
+
+                self.history.log('click',
+                                  frame=self.curr_ti,
+                                  object_id=self.curr_object,
+                                  action=action,
+                                  point=[x, y])
 
     def load_current_image_mask(self, no_mask: bool = False):
         self.curr_image_np = self.res_man.get_image(self.curr_ti)
@@ -456,10 +480,13 @@ class MainController():
 
     def on_propagate(self):
         # start to propagate
+        start_ti = self.curr_ti
+        direction = self.propagate_direction
         with autocast(self.device, enabled=(self.amp and self.device == 'cuda')):
             self.convert_current_image_mask_torch()
 
             self.gui.text(f'Propagation started at t={self.curr_ti}.')
+            self.history.log('propagate_start', frame=start_ti, direction=direction)
             self.processor.clear_sensory_memory()
             self.curr_prob = self.processor.step(self.curr_image_torch,
                                                  self.curr_prob[1:],
@@ -501,6 +528,10 @@ class MainController():
 
             self.propagating = False
             self.curr_frame_dirty = False
+            self.history.log('propagate_stop',
+                              direction=direction,
+                              start_frame=start_ti,
+                              end_frame=self.curr_ti)
             self.on_pause()
             self.on_slider_update()
             self.gui.process_events()
@@ -526,6 +557,7 @@ class MainController():
                                                  force_permanent=True)
             self.update_memory_gauges()
             self.update_gpu_gauges()
+            self.history.log('commit', frame=self.curr_ti)
 
     def on_undo(self):
         if self.propagating:
@@ -535,6 +567,7 @@ class MainController():
             removed = self.polygon_points.pop()
             self.hover_first_point = False
             self.gui.text(f'Removed polygon point: {removed}')
+            self.history.log('undo', frame=self.curr_ti, target='polygon_point')
             self.compose_polygon_overlay()
             self.update_canvas()
             return
@@ -551,6 +584,7 @@ class MainController():
             self.save_current_mask()
             self.interacted_prob = None
             self.interaction = None
+            self.history.log('undo', frame=self.curr_ti, target='interaction')
             self.show_current_frame()
             return
 
@@ -559,6 +593,7 @@ class MainController():
         self.interacted_prob = self.interaction.predict().to(self.device, non_blocking=True)
         self.update_interacted_mask()
         self.update_gpu_gauges()
+        self.history.log('undo', frame=self.curr_ti, target='click')
 
     def on_play_video_timer(self):
         self.curr_ti += 1
@@ -632,6 +667,7 @@ class MainController():
         self.curr_frame_dirty = True
         self.save_current_mask()
         self.reset_this_interaction()
+        self.history.log('reset_frame', frame=self.curr_ti)
         self.show_current_frame()
 
     def on_reset_object(self):
@@ -641,6 +677,7 @@ class MainController():
         self.curr_frame_dirty = True
         self.save_current_mask()
         self.reset_this_interaction()
+        self.history.log('reset_object', frame=self.curr_ti, object_id=self.curr_object)
         self.show_current_frame()
 
     def complete_interaction(self):
@@ -774,6 +811,7 @@ class MainController():
             self.curr_mask = mask
             self.show_current_frame()
             self.save_current_mask()
+            self.history.log('import_mask', frame=self.curr_ti, file=file_name)
 
     def on_import_layer(self):
         file_name = self.gui.open_file('Layer')
