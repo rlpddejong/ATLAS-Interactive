@@ -109,6 +109,53 @@ custom_names = {
     46: "Duodenum",
 }
 
+
+custom_names = {
+    1:  'Hook',
+    2:  'Forceps',
+    3:  'Suction & irrigation',
+    4:  'Vessel sealer',
+    5:  'Right lung',
+    6:  'Azygos vein',
+    7:  'Vena cava',
+    8:  'Aorta',
+    9:  'Pericardium',
+    10: 'Airways',
+    11: 'Vagal nerves',
+    12: 'Recurrent laryngeal nerves',
+    13: 'Thoracic duct incl. fat',
+    14: 'Thoracic duct',
+    15: 'Left pleura',
+    16: 'Esophagus',
+    17: 'Clip applier',
+    18: 'Needle driver',
+    19: 'Scissors',
+    20: 'Stapler',
+}
+
+color_palette  = {
+    1:  (100,  80,   0),            # Hook                          (Orange)
+    2:  (128,   0,   0),            # Forceps                       (Red)
+    3:  (  0, 128,   0),            # Suction & irrigation          (Green)
+    4:  (  0, 255, 255),            # Vessel sealer                 (Cyan)
+    5:  (160, 100, 160),            # Right lung                    (Pink)
+    6:  (  0,   0, 255),            # Azygos vein                   (Blue)   
+    7:  (  0,   0, 100),            # Vena cava                     (Dark Blue)  
+    8:  (255,   0,   0),            # Aorta                         (Red)
+    9:  (255,   0, 157),            # Pericardium                   (Purple)
+    10: (255, 255, 255),            # Airways                       (White)
+    11: (255, 255,   0),            # Vagal nerves                  (Yellow)
+    12: (139, 128,   0),            # Recurrent laryngeal nerves    (Dark Yellow)
+    13: (  0, 255,   0),            # Thoracic duct incl. fat       (Green)
+    14: (  0, 100,   0),            # Thoracic duct                 (Dark Green)
+    15: (140,  80, 180),            # Left pleura                   (Violet)
+    16: (255, 160,   0),            # Esophagus                     (Orange)
+    17: (  0, 128, 128),            # Clip applier                  (Teal)
+    18: (200, 255, 100),            # Needle driver                 (Lime-Yellow Green)
+    19: (180, 180, 255),            # Scissors                      (Pastel Blue)
+    20: (128, 100, 160),            # Stapler                       (Muted Lavender)
+}
+
 color_palette = {
     1: (255, 0, 0), # Class 1, red
     2: (0, 0, 255), # Class 2, blue

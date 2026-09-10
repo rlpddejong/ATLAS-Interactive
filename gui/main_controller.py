@@ -22,7 +22,7 @@ from gui.cutie.inference.inference_core import InferenceCore
 
 from gui.interaction import *
 from gui.interactive_utils import *
-from gui.resource_manager import ResourceManager
+from gui.resource_manager import ResourceManager, resolve_workspace
 from gui.gui import GUI
 from gui.click_controller import ClickController
 from gui.reader import PropagationReader, get_data_loader
@@ -48,15 +48,7 @@ class MainController():
         self._status_callback = status_callback
 
         # setting up the workspace
-        if cfg["workspace"] is None:
-            if cfg["images"] is not None:
-                basename = path.basename(cfg["images"])
-            elif cfg["video"] is not None:
-                basename = path.basename(cfg["video"]) #[:-4]
-            else:
-                raise NotImplementedError('Either images, video, or workspace has to be specified')
-
-            cfg["workspace"] = path.join(cfg['workspace_root'], basename)
+        resolve_workspace(cfg)
 
         # reading arguments
         self.cfg = cfg

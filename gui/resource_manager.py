@@ -51,9 +51,37 @@ class SaveItem:
     name: str = None  # only used for soft_mask
 
 
+def resolve_workspace(cfg: DictConfig) -> None:
+    """Fill in cfg['workspace'] in place if it hasn't been set explicitly.
+
+    If the selected images folder already looks like a prepared workspace
+    (i.e. it has its own 'images' subfolder, and possibly a 'masks'
+    subfolder), that folder is used directly as the workspace instead of
+    copying its contents into workspace_root. This lets users reopen a
+    folder of images/masks that lives outside workspace_root and keep
+    saving masks back into it in place.
+    """
+    if cfg['workspace'] is not None:
+        return
+
+    images = cfg['images']
+    video = cfg['video']
+    with open_dict(cfg):
+        if images is not None and path.isdir(path.join(images, 'images')):
+            cfg['workspace'] = images
+        elif images is not None:
+            cfg['workspace'] = path.join(cfg['workspace_root'], path.basename(images))
+        elif video is not None:
+            cfg['workspace'] = path.join(cfg['workspace_root'], path.basename(video)) #[:-4]
+        else:
+            raise NotImplementedError('Either images, video, or workspace has to be specified')
+
+
 class ResourceManager:
 
     def __init__(self, cfg: DictConfig):
+        resolve_workspace(cfg)
+
         # determine inputs
         images = cfg['images']
         video = cfg['video']
@@ -61,20 +89,7 @@ class ResourceManager:
         self.max_size = cfg['max_overall_size']
         self.palette = custom_palette
 
-        # create temporary workspace if not specified
-        if self.workspace is None:
-            if images is not None:
-                basename = path.basename(images)
-            elif video is not None:
-                basename = path.basename(video) #[:-4]
-            else:
-                raise NotImplementedError('Either images, video, or workspace has to be specified')
-
-            self.workspace = path.join('./workspace', basename)
-
         print(f'Workspace is in: {self.workspace}')
-        with open_dict(cfg):
-            cfg['workspace'] = self.workspace
 
         # determine the location of input images
         need_decoding = False
@@ -198,11 +213,18 @@ class ResourceManager:
         image_list = os.listdir(images)
         print(f'Copying/resizing frames into {self.image_dir}...')
         for image_name in tqdm(image_list):
+            src = path.join(images, image_name)
+            if path.isdir(src):
+                # e.g. a sibling 'masks' folder living next to the images
+                continue
             if self.max_size < 0:
                 # just copy
-                shutil.copy2(path.join(images, image_name), self.image_dir)
+                shutil.copy2(src, self.image_dir)
             else:
-                frame = cv2.imread(path.join(images, image_name))
+                frame = cv2.imread(src)
+                if frame is None:
+                    print(f'Skipping {src}: not a readable image.')
+                    continue
                 h, w = frame.shape[:2]
                 if self.max_size > 0 and min(h, w) > self.max_size:
                     new_w = (w * self.max_size // min(w, h))
