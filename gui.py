@@ -1,16 +1,55 @@
 import logging
 import os
 import sys
+import traceback
+
+log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+os.makedirs(log_dir, exist_ok=True)
+crash_log_path = os.path.join(log_dir, 'gui.log')
 
 # when launched via pythonw.exe (no console), sys.stdout/stderr are None; any
 # print() or tqdm progress bar would then crash with nowhere to show the error.
 # redirect them to a log file instead so the app keeps running silently.
-if sys.stdout is None or sys.stderr is None:
-    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
-    os.makedirs(log_dir, exist_ok=True)
-    log_file = open(os.path.join(log_dir, 'gui.log'), 'a', buffering=1, encoding='utf-8')
+_stdio_redirected_to_log = sys.stdout is None or sys.stderr is None
+if _stdio_redirected_to_log:
+    log_file = open(crash_log_path, 'a', buffering=1, encoding='utf-8')
     sys.stdout = log_file
     sys.stderr = log_file
+
+
+def _excepthook(exc_type, exc_value, exc_tb):
+    """Make crashes visible: always log them, and pop up a dialog with the
+    error if the GUI is up (the no-console/pythonw build otherwise just
+    vanishes with the traceback stuck in a log file nobody looks at)."""
+    tb_text = ''.join(traceback.format_exception(exc_type, exc_value, exc_tb))
+
+    if _stdio_redirected_to_log:
+        print(tb_text, file=sys.stderr)
+    else:
+        # still have a real console -- also mirror the crash into the log
+        # file so it isn't lost once the console window closes
+        try:
+            with open(crash_log_path, 'a', encoding='utf-8') as f:
+                f.write(tb_text + '\n')
+        except Exception:
+            pass
+        print(tb_text, file=sys.stderr)
+
+    try:
+        from PySide6.QtWidgets import QApplication, QMessageBox
+        if QApplication.instance() is not None:
+            box = QMessageBox()
+            box.setIcon(QMessageBox.Icon.Critical)
+            box.setWindowTitle('ATLAS-Interactive - Unexpected Error')
+            box.setText(f'An unexpected error occurred:\n\n{exc_type.__name__}: {exc_value}')
+            box.setInformativeText(f'Details have been saved to:\n{crash_log_path}')
+            box.setDetailedText(tb_text)
+            box.exec()
+    except Exception:
+        pass
+
+
+sys.excepthook = _excepthook
 
 # fix for Windows
 if 'QT_QPA_PLATFORM_PLUGIN_PATH' not in os.environ:
