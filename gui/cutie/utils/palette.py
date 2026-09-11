@@ -156,17 +156,17 @@ custom_names = {
 #     20: (128, 100, 160),            # Stapler                       (Muted Lavender)
 # }
 
-color_palette = {
-    1: (255, 0, 0), # Class 1, red
-    2: (0, 0, 255), # Class 2, blue
-    3: (0, 255, 0), # Class 2, green
-}
+# color_palette = {
+#     1: (255, 0, 0), # Class 1, red
+#     2: (0, 0, 255), # Class 2, blue
+#     3: (0, 255, 0), # Class 2, green
+# }
 
-custom_names = {
-    1: "Class 1",
-    2: "Class 2",
-    3: "Class 3",
-}
+# custom_names = {
+#     1: "Class 1",
+#     2: "Class 2",
+#     3: "Class 3",
+# }
 
 custom_palette_np = np.array([color_palette.get(i, (0, 0, 0)) for i in range(len(custom_names)+1)])
 custom_palette = custom_palette_np.astype(np.uint8).tobytes()

@@ -1,7 +1,7 @@
 import os
 from os import path
 import logging
-from typing import Literal
+from typing import List, Literal
 
 import cv2
 # fix conflicts between qt5 and cv2
@@ -392,6 +392,68 @@ class MainController():
             self.curr_prob = index_numpy_to_one_hot_torch(self.curr_mask, self.num_objects + 1).to(
                 self.device, non_blocking=True)
 
+    def _present_object_ids(self) -> List[int]:
+        # which of the num_objects classes actually have annotated pixels on
+        # the current frame -- only these get fed to the model, so it only
+        # has to internally track objects that are actually in use instead
+        # of all num_objects classes regardless of whether they appear here
+        #
+        # ObjectManager.add_new_objects() requires its input ordered by each
+        # object's internal tmp_id (assigned in first-annotated order), not
+        # by real class id -- those two orders diverge once classes have been
+        # drawn out of numeric order across different frames/sessions. Already
+        # -tracked objects must come first, sorted by their existing tmp_id;
+        # brand-new objects go after (any order among them is fine, since
+        # add_new_objects() hands out fresh tmp_ids sequentially as it sees
+        # them, which stays sorted appended after the tracked ones).
+        ids = [int(i) for i in np.unique(self.curr_mask) if i != 0]
+        obj_manager = self.processor.object_manager
+
+        def sort_key(obj_id):
+            if obj_id in obj_manager.obj_id_to_obj:
+                return (0, obj_manager.find_tmp_by_id(obj_id))
+            return (1, obj_id)
+
+        return sorted(ids, key=sort_key)
+
+    def _curr_mask_torch(self) -> torch.Tensor:
+        return torch.from_numpy(self.curr_mask.astype(np.int64)).to(self.device, non_blocking=True)
+
+    def _scatter_sparse_prob(self, sparse_prob: torch.Tensor) -> torch.Tensor:
+        # the processor only tracks objects that have been annotated, indexed
+        # by an internal "tmp_id" (assigned in the order objects were first
+        # added) rather than by their real class id. Scatter its output back
+        # into the dense num_objects+1 layout (channel i == class i) that the
+        # rest of the GUI (visualization, click interaction, undo) expects.
+        dense = torch.zeros((self.num_objects + 1, *sparse_prob.shape[1:]),
+                            dtype=sparse_prob.dtype,
+                            device=sparse_prob.device)
+        dense[0] = sparse_prob[0]
+        for tmp_id, obj in self.processor.object_manager.tmp_id_to_obj.items():
+            dense[obj.id] = sparse_prob[tmp_id]
+        return dense
+
+    def _mask_from_sparse_prob(self, sparse_prob: torch.Tensor) -> np.ndarray:
+        mask = self.processor.output_prob_to_mask(sparse_prob)
+        return mask.cpu().numpy().astype(np.uint8)
+
+    def _step_with_current_annotation(self, *, force_permanent: bool = False) -> torch.Tensor:
+        # only pass a mask (and register objects) when the current frame
+        # actually has annotated pixels; otherwise this is just a "predict
+        # from memory" step for whatever is already being tracked. Passing
+        # objects=[] with an (all-empty) mask would hit a short-circuit in
+        # InferenceCore.step() that returns a background-only result without
+        # touching the already-tracked objects, which _scatter_sparse_prob
+        # can't reconcile with the currently-tracked object count.
+        present_ids = self._present_object_ids()
+        if present_ids:
+            return self.processor.step(self.curr_image_torch,
+                                       self._curr_mask_torch(),
+                                       objects=present_ids,
+                                       idx_mask=True,
+                                       force_permanent=force_permanent)
+        return self.processor.step(self.curr_image_torch, force_permanent=force_permanent)
+
     def compose_current_im(self):
         self.vis_image = get_visualization(self.vis_mode, self.curr_image_np, self.curr_mask,
                                            self.overlay_layer, self.vis_target_objects)
@@ -491,10 +553,9 @@ class MainController():
             self.gui.text(f'Propagation started at t={self.curr_ti}.')
             self.history.log('propagate_start', frame=start_ti, direction=direction)
             self.processor.clear_sensory_memory()
-            self.curr_prob = self.processor.step(self.curr_image_torch,
-                                                 self.curr_prob[1:],
-                                                 idx_mask=False)
-            self.curr_mask = torch_prob_to_numpy_mask(self.curr_prob)
+            sparse_prob = self._step_with_current_annotation()
+            self.curr_prob = self._scatter_sparse_prob(sparse_prob)
+            self.curr_mask = self._mask_from_sparse_prob(sparse_prob)
             # clear
             self.interacted_prob = None
             self.reset_this_interaction()
@@ -517,8 +578,9 @@ class MainController():
                 self.curr_image_torch = self.curr_image_torch.to(self.device, non_blocking=True)
                 self.propagate_fn()
 
-                self.curr_prob = self.processor.step(self.curr_image_torch)
-                self.curr_mask = torch_prob_to_numpy_mask(self.curr_prob)
+                sparse_prob = self.processor.step(self.curr_image_torch)
+                self.curr_prob = self._scatter_sparse_prob(sparse_prob)
+                self.curr_mask = self._mask_from_sparse_prob(sparse_prob)
 
                 self.save_current_mask()
                 self.show_current_frame(fast=True)
@@ -554,10 +616,8 @@ class MainController():
         with autocast(self.device, enabled=(self.amp and self.device == 'cuda')):
             self.convert_current_image_mask_torch()
             self.gui.text(f'Permanent memory saved at {self.curr_ti}.')
-            self.curr_prob = self.processor.step(self.curr_image_torch,
-                                                 self.curr_prob[1:],
-                                                 idx_mask=False,
-                                                 force_permanent=True)
+            sparse_prob = self._step_with_current_annotation(force_permanent=True)
+            self.curr_prob = self._scatter_sparse_prob(sparse_prob)
             self.update_memory_gauges()
             self.update_gpu_gauges()
             self.history.log('commit', frame=self.curr_ti)

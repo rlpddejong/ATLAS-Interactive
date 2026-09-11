@@ -150,6 +150,10 @@ class InferenceCore:
                                device=key.device,
                                dtype=key.dtype)
 
+        # sensory may be missing entries for objects that already have stored
+        # memory (e.g. right after clear_sensory_memory(), or for an object
+        # added via add_new_objects() whose sensory state was never seeded)
+        self.memory.initialize_sensory_if_needed(key, self.object_manager.all_obj_ids)
         memory_readout = self.memory.read(pix_feat, key, selection, self.last_mask, self.network)
         memory_readout = self.object_manager.realize_dict(memory_readout)
         sensory, _, pred_prob_with_bg = self.network.segment(ms_features,
