@@ -76,6 +76,7 @@ class MainController():
         self.interaction_type: str = 'Click'
         self.curr_ti: int = 0
         self.curr_object: int = 1
+        self.locked_object_ids: set = set()
         self.propagating: bool = False
         self.propagate_direction: Literal['forward', 'backward', 'none'] = 'none'
         self.last_ex = self.last_ey = 0
@@ -135,7 +136,7 @@ class MainController():
 
         # try to load the default overlay
         self._try_load_layer('./docs/uiuc.png')
-        self.gui.set_object_color(self.curr_object)
+        self.gui.set_current_object_id(self.curr_object)
         self.update_config()
 
     def _report_status(self, message) -> None:
@@ -182,6 +183,7 @@ class MainController():
         self.length = self.res_man.length
         self.interaction = None
         self.curr_ti = 0
+        self.locked_object_ids = set()
         self.propagating = False
         self.propagate_direction = 'none'
         self.curr_frame_dirty = False
@@ -204,7 +206,8 @@ class MainController():
 
         self.update_memory_gauges()
         self.update_gpu_gauges()
-        self.gui.set_object_color(self.curr_object)
+        self.gui.reset_locks()
+        self.gui.set_current_object_id(self.curr_object)
 
         self.gui.text(f'Loaded new source. Workspace: {self.cfg["workspace"]}')
 
@@ -212,14 +215,39 @@ class MainController():
         if number == self.curr_object:
             return
         self.curr_object = number
-        self.gui.object_dial.setValue(number)
         if self.click_ctrl is not None:
             self.click_ctrl.unanchor()
         self.gui.text(f'Current object changed to {number}.')
-        self.gui.set_object_color(number)
         self.gui.set_current_object_id(number)
         self.show_current_frame()
-    
+
+    def on_toggle_lock(self, object_id: int):
+        # a locked class can't be hand-edited, and during propagation its
+        # mask is restored from whatever was already saved on disk for each
+        # frame instead of being re-predicted by the model -- see
+        # _restore_locked_classes() for how that's enforced
+        if object_id in self.locked_object_ids:
+            self.locked_object_ids.discard(object_id)
+            self.gui.text(f'Class {object_id} unlocked.')
+        else:
+            self.locked_object_ids.add(object_id)
+            self.gui.text(f'Class {object_id} locked.')
+        self.history.log('toggle_lock',
+                          object_id=object_id,
+                          locked=(object_id in self.locked_object_ids))
+        self.gui.set_lock_state(object_id, object_id in self.locked_object_ids)
+
+    def on_lock_all(self):
+        # toggles: locks everything, unless everything is already locked, in
+        # which case it unlocks everything
+        locking = len(self.locked_object_ids) < self.num_objects
+        self.locked_object_ids = set(range(1, self.num_objects + 1)) if locking else set()
+        for object_id in range(1, self.num_objects + 1):
+            self.gui.set_lock_state(object_id, locking)
+        self.gui.set_lock_all_button_state(locking)
+        self.history.log('lock_all', locked=locking)
+        self.gui.text('All classes locked.' if locking else 'All classes unlocked.')
+
     def on_mouse_motion_xy(self, x: int, y: int):
         # Check if polygon is being drawn and at least one point exists
         if self.polygon_points:
@@ -279,6 +307,10 @@ class MainController():
             self.gui.text(mode_text)
             self.compose_current_im()
             self.update_canvas()
+            return
+
+        if self.curr_object in self.locked_object_ids:
+            self.gui.text(f'Class {self.curr_object} is locked. Unlock it to edit.')
             return
 
         if self.in_polygon_mode:
@@ -437,6 +469,31 @@ class MainController():
         mask = self.processor.output_prob_to_mask(sparse_prob)
         return mask.cpu().numpy().astype(np.uint8)
 
+    def _restore_locked_classes(self) -> None:
+        # the model has no way to "skip" an object it's already tracking (it
+        # always predicts every tracked object together), so a locked class
+        # would otherwise still silently drift frame to frame. Undo that by
+        # discarding the model's fresh guess for each locked class and
+        # putting back exactly whatever was already saved to disk for this
+        # frame -- not a snapshot from whenever the class was locked, but
+        # this specific frame's own previously saved mask (blank if this
+        # frame was never annotated before).
+        if not self.locked_object_ids:
+            return
+        saved_mask = self.res_man.get_mask(self.curr_ti)
+        for obj_id in self.locked_object_ids:
+            self.curr_mask[self.curr_mask == obj_id] = 0
+            if self.curr_prob is not None:
+                self.curr_prob[obj_id] = 0
+            if saved_mask is None:
+                continue
+            keep = (saved_mask == obj_id)
+            if np.any(keep):
+                self.curr_mask[keep] = obj_id
+                if self.curr_prob is not None:
+                    self.curr_prob[:, keep] = 0
+                    self.curr_prob[obj_id, keep] = 1
+
     def _step_with_current_annotation(self, *, force_permanent: bool = False) -> torch.Tensor:
         # only pass a mask (and register objects) when the current frame
         # actually has annotated pixels; otherwise this is just a "predict
@@ -556,6 +613,7 @@ class MainController():
             sparse_prob = self._step_with_current_annotation()
             self.curr_prob = self._scatter_sparse_prob(sparse_prob)
             self.curr_mask = self._mask_from_sparse_prob(sparse_prob)
+            self._restore_locked_classes()
             # clear
             self.interacted_prob = None
             self.reset_this_interaction()
@@ -581,6 +639,7 @@ class MainController():
                 sparse_prob = self.processor.step(self.curr_image_torch)
                 self.curr_prob = self._scatter_sparse_prob(sparse_prob)
                 self.curr_mask = self._mask_from_sparse_prob(sparse_prob)
+                self._restore_locked_classes()
 
                 self.save_current_mask()
                 self.show_current_frame(fast=True)
@@ -618,6 +677,7 @@ class MainController():
             self.gui.text(f'Permanent memory saved at {self.curr_ti}.')
             sparse_prob = self._step_with_current_annotation(force_permanent=True)
             self.curr_prob = self._scatter_sparse_prob(sparse_prob)
+            self._restore_locked_classes()
             self.update_memory_gauges()
             self.update_gpu_gauges()
             self.history.log('commit', frame=self.curr_ti)
@@ -700,10 +760,6 @@ class MainController():
         else:
             self.gui.text(f'No masks found in {mask_folder}')
 
-    def on_object_dial_change(self):
-        object_id = self.gui.object_dial.value()
-        self.hit_number_key(object_id)
-
     def on_fps_dial_change(self):
         self.output_fps = self.gui.fps_dial.value()
 
@@ -724,9 +780,17 @@ class MainController():
             self.click_ctrl.unanchor()
 
     def on_reset_mask(self):
-        self.curr_mask.fill(0)
+        # preserve locked classes' pixels -- resetting the frame shouldn't
+        # be able to touch a class that's protected from editing
+        if self.locked_object_ids:
+            keep = np.isin(self.curr_mask, list(self.locked_object_ids))
+            self.curr_mask[~keep] = 0
+        else:
+            self.curr_mask.fill(0)
         if self.curr_prob is not None:
-            self.curr_prob.fill_(0)
+            for obj_id in range(self.num_objects + 1):
+                if obj_id not in self.locked_object_ids:
+                    self.curr_prob[obj_id] = 0
         self.curr_frame_dirty = True
         self.save_current_mask()
         self.reset_this_interaction()
@@ -734,6 +798,9 @@ class MainController():
         self.show_current_frame()
 
     def on_reset_object(self):
+        if self.curr_object in self.locked_object_ids:
+            self.gui.text(f'Class {self.curr_object} is locked. Unlock it to reset.')
+            return
         self.curr_mask[self.curr_mask == self.curr_object] = 0
         if self.curr_prob is not None:
             self.curr_prob[self.curr_object] = 0

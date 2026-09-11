@@ -242,8 +242,16 @@ class InferenceCore:
         is_mem_frame = ((self.curr_ti - self.last_mem_ti >= self.mem_every) or
                         (mask is not None)) and (not end)
         # segment when there is no input mask or when the input mask is incomplete
-        need_segment = (mask is None) or (self.object_manager.num_obj > 0
-                                          and not self.object_manager.has_all(objects))
+        # (i.e. doesn't cover every object we're already tracking). has_all()
+        # checks the wrong direction for this -- it only confirms every given
+        # object is already known, not that every already-known object is
+        # given -- so a mask that only annotates a subset of the currently
+        # tracked objects would wrongly be treated as "complete", producing
+        # an undersized mask/last_mask that later mismatches the full
+        # tracked-object count in _add_memory().
+        need_segment = (mask is None) or (
+            self.object_manager.num_obj > 0
+            and not set(self.object_manager.all_obj_ids).issubset(objects))
         update_sensory = ((self.curr_ti - self.last_mem_ti) in self.stagger_ti) and (not end)
 
         # encoding the image

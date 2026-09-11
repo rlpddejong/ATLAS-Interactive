@@ -6,7 +6,8 @@ from omegaconf import DictConfig
 
 from PySide6.QtWidgets import (QWidget, QComboBox, QCheckBox, QHBoxLayout, QLabel, QPushButton,
                                QTextEdit, QSpinBox, QPlainTextEdit, QVBoxLayout, QSizePolicy,
-                               QButtonGroup, QSlider, QRadioButton, QApplication, QFileDialog)
+                               QButtonGroup, QSlider, QRadioButton, QApplication, QFileDialog,
+                               QListWidget, QListWidgetItem, QAbstractItemView)
 
 from PySide6.QtGui import (QKeySequence, QShortcut, QTextCursor, QImage, QPixmap, QIcon)
 from PySide6.QtCore import Qt, QTimer
@@ -73,25 +74,9 @@ class GUI(QWidget):
         self.lcd.setMaximumWidth(150)
         self.lcd.setText('{: 5d} / {: 5d}'.format(0, controller.T - 1))
 
-        # ID
-        self.object_dial = QSpinBox()
-
-        self.object_class_combo = QComboBox()
-        for obj_id in range(1, controller.num_objects + 1):
-            class_name = custom_names[obj_id]  # assuming `custom_names` is a list or dict
-            self.object_class_combo.addItem(class_name, obj_id)  # store obj_id as userData
-
-        self.object_class_combo.currentIndexChanged.connect(self.on_class_combo_changed)
-
-        self.object_dial.setReadOnly(False)
-        self.object_dial.setMinimumSize(50, 30)
-        self.object_dial.setMinimum(1)
-        self.object_dial.setMaximum(controller.num_objects)
-        self.object_dial.editingFinished.connect(controller.on_object_dial_change)
-
-        self.object_color = QLabel()
-        self.object_color.setMinimumSize(30, 30)
-        self.object_color.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # class list panel: one row per class, showing its color, name, and
+        # a lock toggle -- replaces the old ID spinbox + class dropdown
+        self.class_list, self.class_rows = self._build_class_list(controller)
 
         self.frame_name = QLabel()
         self.frame_name.setMinimumSize(100, 30)
@@ -188,11 +173,6 @@ class GUI(QWidget):
         interact_topbox.addWidget(self.reset_object_button)
         interact_topbox.addWidget(self.frame_name)
 
-        interact_botbox.addWidget(self.object_color)
-        interact_botbox.addWidget(QLabel('ID:'))
-        interact_botbox.addWidget(self.object_dial)
-        interact_botbox.addWidget(QLabel('Class:'))
-        interact_botbox.addWidget(self.object_class_combo)
         interact_botbox.addWidget(QLabel('Visualization mode'))
         interact_botbox.addWidget(self.combo)
 
@@ -234,6 +214,17 @@ class GUI(QWidget):
 
         # Drawing area main canvas
         draw_area = QHBoxLayout()
+
+        # class panel: leftmost column, list of classes with lock toggles
+        self.lock_all_button = QPushButton('Lock all classes')
+        self.lock_all_button.clicked.connect(controller.on_lock_all)
+
+        class_area = QVBoxLayout()
+        class_area.addWidget(QLabel('Classes'))
+        class_area.addWidget(self.lock_all_button)
+        class_area.addWidget(self.class_list)
+        draw_area.addLayout(class_area, 1)
+
         draw_area.addWidget(self.main_canvas, 4)
 
         # right area
@@ -325,30 +316,79 @@ class GUI(QWidget):
         # quit shortcut
         QShortcut(QKeySequence(Qt.Key.Key_Q), self).activated.connect(self.close)
 
-    def set_current_object_id(self, object_id: int):
-        self.object_dial.blockSignals(True)
-        self.object_dial.setValue(object_id)
-        self.object_dial.blockSignals(False)
+    def _build_class_list(self, controller):
+        class_list = QListWidget()
+        class_list.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        class_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
 
-        # Update combo box to match object_id
-        index = self.object_class_combo.findData(object_id)
-        if index != -1:
-            self.object_class_combo.blockSignals(True)
-            self.object_class_combo.setCurrentIndex(index)
-            self.object_class_combo.blockSignals(False)
+        class_rows = {}
+        for obj_id in range(1, controller.num_objects + 1):
+            item = QListWidgetItem()
+            item.setData(Qt.ItemDataRole.UserRole, obj_id)
 
-        self.set_object_color(object_id)
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(4, 2, 4, 2)
 
-    def on_class_combo_changed(self, index):
-        obj_id = self.object_class_combo.itemData(index)
-        if obj_id is None:
+            r, g, b = custom_palette_np[obj_id]
+            swatch = QLabel()
+            swatch.setFixedSize(18, 18)
+            swatch.setStyleSheet(f'background-color: rgb({r},{g},{b}); border: 1px solid #888;')
+
+            name_label = QLabel(f'{obj_id}: {custom_names[obj_id]}')
+            name_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+            lock_button = QPushButton('\U0001F513')  # unlocked padlock
+            lock_button.setCheckable(True)
+            lock_button.setFixedWidth(32)
+            lock_button.setToolTip('Locked classes cannot be edited or altered by propagation.')
+            lock_button.clicked.connect(
+                lambda checked=False, oid=obj_id: controller.on_toggle_lock(oid))
+
+            row_layout.addWidget(swatch)
+            row_layout.addWidget(name_label, 1)
+            row_layout.addWidget(lock_button)
+
+            item.setSizeHint(row_widget.sizeHint())
+            class_list.addItem(item)
+            class_list.setItemWidget(item, row_widget)
+
+            class_rows[obj_id] = {'item': item, 'row_widget': row_widget, 'lock_button': lock_button}
+
+        class_list.itemClicked.connect(self._on_class_row_clicked)
+        return class_list, class_rows
+
+    def _on_class_row_clicked(self, item):
+        obj_id = item.data(Qt.ItemDataRole.UserRole)
+        if obj_id is not None:
+            self.controller.hit_number_key(obj_id)
+
+    def set_lock_state(self, object_id: int, locked: bool):
+        row = self.class_rows.get(object_id)
+        if row is None:
             return
+        button = row['lock_button']
+        button.blockSignals(True)
+        button.setChecked(locked)
+        button.setText('\U0001F512' if locked else '\U0001F513')  # locked/unlocked padlock
+        button.blockSignals(False)
 
-        self.object_dial.blockSignals(True)
-        self.object_dial.setValue(obj_id)
-        self.object_dial.blockSignals(False)
+    def reset_locks(self):
+        for object_id in self.class_rows:
+            self.set_lock_state(object_id, False)
+        self.set_lock_all_button_state(False)
 
-        self.controller.on_object_dial_change()
+    def set_lock_all_button_state(self, locked: bool):
+        self.lock_all_button.setText('Unlock all classes' if locked else 'Lock all classes')
+
+    def set_current_object_id(self, object_id: int):
+        row = self.class_rows.get(object_id)
+        if row is None:
+            return
+        self.class_list.blockSignals(True)
+        self.class_list.setCurrentItem(row['item'])
+        self.class_list.blockSignals(False)
+        self.class_list.scrollToItem(row['item'])
 
     def resizeEvent(self, event):
         self.controller.show_current_frame()
@@ -490,12 +530,6 @@ class GUI(QWidget):
                                                    "Image files (*)",
                                                    options=options)
         return file_name
-
-    def set_object_color(self, object_id: int):
-        r, g, b = custom_palette_np[object_id]
-        rgb = f'rgb({r},{g},{b})'
-        self.object_color.setFixedSize(50, 30)  # Make it square
-        self.object_color.setStyleSheet(f'QLabel {{ background-color: {rgb}; border: 1px solid #d3d3d3; }}')
 
     def progressbar_update(self, progress: float):
         self.progressbar.setValue(int(progress * 100))
