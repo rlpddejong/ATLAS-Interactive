@@ -96,6 +96,7 @@ class GUI(QWidget):
         
         self.combo.addItem("mask")
         self.combo.addItem("overlay")
+        self.combo.addItem("overlay+numbers")
         self.combo.addItem("image")
         self.combo.setCurrentText('overlay')
         self.combo.currentTextChanged.connect(controller.set_vis_mode)

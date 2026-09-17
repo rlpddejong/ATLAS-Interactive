@@ -981,7 +981,7 @@ class MainController():
                 self.update_canvas()
 
     def on_toggle_vis_mode(self):
-        vis_modes = ['image', 'mask', 'overlay']
+        vis_modes = ['image', 'mask', 'overlay', 'overlay+numbers']
         try:
             next_index = (vis_modes.index(self.vis_mode) + 1) % len(vis_modes)
             self.vis_mode = vis_modes[next_index]

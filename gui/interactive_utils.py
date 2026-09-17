@@ -2,6 +2,7 @@
 
 from typing import Literal, List
 import numpy as np
+import cv2
 
 import torch
 import torch.nn.functional as F
@@ -47,7 +48,7 @@ color_map_torch = torch.from_numpy(color_map_np).to(device) / 255
 
 
 
-def get_visualization(mode: Literal['image', 'mask', 'overlay'],
+def get_visualization(mode: Literal['image', 'mask', 'overlay', 'overlay+numbers'],
                       image: np.ndarray,
                       mask: np.ndarray,
                       layer: np.ndarray,
@@ -58,11 +59,13 @@ def get_visualization(mode: Literal['image', 'mask', 'overlay'],
         return color_map_np[mask]
     elif mode == 'overlay':
         return overlay_davis(image, mask)
+    elif mode == 'overlay+numbers':
+        return draw_class_numbers(overlay_davis(image, mask), mask)
     else:
         raise NotImplementedError
 
 
-def get_visualization_torch(mode: Literal['image', 'mask', 'overlay'],
+def get_visualization_torch(mode: Literal['image', 'mask', 'overlay', 'overlay+numbers'],
                             image: torch.Tensor,
                             prob: torch.Tensor,
                             layer: torch.Tensor,
@@ -74,8 +77,35 @@ def get_visualization_torch(mode: Literal['image', 'mask', 'overlay'],
         return (color_map_torch[mask] * 255).byte().cpu().numpy()
     elif mode == 'overlay':
         return overlay_davis_torch(image, prob)
+    elif mode == 'overlay+numbers':
+        mask = torch.max(prob, dim=0).indices.cpu().numpy()
+        return draw_class_numbers(overlay_davis_torch(image, prob), mask)
     else:
         raise NotImplementedError
+
+
+def draw_class_numbers(image: np.ndarray, mask: np.ndarray, min_area: int = 20) -> np.ndarray:
+    """ Draw each class's numeric id at the centroid of its connected components. """
+    result = np.ascontiguousarray(image)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.6
+    for class_id in np.unique(mask):
+        if class_id == 0:
+            continue
+        binary_mask = (mask == class_id).astype(np.uint8)
+        num_labels, _, stats, centroids = cv2.connectedComponentsWithStats(binary_mask,
+                                                                            connectivity=8)
+        for label in range(1, num_labels):
+            if stats[label, cv2.CC_STAT_AREA] < min_area:
+                continue
+            cx, cy = centroids[label]
+            text = str(int(class_id))
+            (text_w, text_h), _ = cv2.getTextSize(text, font, font_scale, 2)
+            org = (int(cx - text_w / 2), int(cy + text_h / 2))
+            # black outline for legibility on top of any color
+            cv2.putText(result, text, org, font, font_scale, (0, 0, 0), 3, cv2.LINE_AA)
+            cv2.putText(result, text, org, font, font_scale, (255, 255, 255), 1, cv2.LINE_AA)
+    return result
 
 
 def overlay_davis(image: np.ndarray, mask: np.ndarray, alpha: float = 0.5, fade: bool = False):

@@ -11,6 +11,7 @@ vis_endpoint: vis
 amp: True
 weights: gui/weights/cutie-surgenetseg-50k.pth
 ritm_weights: gui/weights/ritm-surgenetseg-50k.pth
+#ritm_weights: gui/weights/coco_lvis_h18_itermask_finetuned_ep90_includingtest.pth
 
 # All "size" parameters represent the length of the shorter edge
 # maximum internal processing size; reducing this speeds up processing
