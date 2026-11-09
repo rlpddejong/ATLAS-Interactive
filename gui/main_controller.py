@@ -560,10 +560,11 @@ class MainController():
     def on_slider_update(self):
         # if we are propagating, the on_run function will take care of everything
         # don't do duplicate work here
-        self.curr_ti = self.gui.tl_slider.value()
         if not self.propagating:
-            # with self.vis_cond:
-            #     self.vis_cond.notify()
+            # persist any pending edit to the frame we are LEAVING. This must
+            # happen before curr_ti is moved to the new slider value, otherwise
+            # the old frame's mask gets written to the new frame's file (and
+            # then loaded right back as if it belonged there).
             if self.curr_frame_dirty:
                 self.save_current_mask()
             self.curr_frame_dirty = False
@@ -572,6 +573,10 @@ class MainController():
             self.curr_ti = self.gui.tl_slider.value()
             self.load_current_image_mask()
             self.show_current_frame()
+        else:
+            # during propagation on_propagate() drives everything; it only
+            # needs curr_ti to follow the slider
+            self.curr_ti = self.gui.tl_slider.value()
 
     def on_forward_propagation(self):
         if self.propagating:
@@ -719,10 +724,12 @@ class MainController():
         self.history.log('undo', frame=self.curr_ti, target='click')
 
     def on_play_video_timer(self):
-        self.curr_ti += 1
-        if self.curr_ti > self.T - 1:
-            self.curr_ti = 0
-        self.gui.tl_slider.setValue(self.curr_ti)
+        # don't touch curr_ti here: on_slider_update needs it to still point
+        # at the current frame so a pending edit is saved to the right file
+        next_ti = self.curr_ti + 1
+        if next_ti > self.T - 1:
+            next_ti = 0
+        self.gui.tl_slider.setValue(next_ti)
 
     def on_export_visualization(self):
         # NOTE: Save visualization at the end of propagation
